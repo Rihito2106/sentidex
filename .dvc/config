@@ -1,0 +1,5 @@
+[core]
+    remote = s3remote
+['remote "s3remote"']
+    url = s3://sentidex-mlflow-dvc-897729113277-ap-south-1-an/dvc-store
+    region = ap-south-1
