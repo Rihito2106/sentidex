@@ -4,8 +4,14 @@ import os
 import pickle
 import yaml
 import logging
+import mlflow
 import lightgbm as lgb
 from sklearn.feature_extraction.text import TfidfVectorizer
+import dotenv
+
+dotenv.load_dotenv()
+
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
 
 # logging configuration
 logger = logging.getLogger('model_building')
@@ -63,26 +69,28 @@ def apply_tfidf(train_data: pd.DataFrame, max_features: int, ngram_range: tuple)
     try:
         vectorizer = TfidfVectorizer(max_features=max_features, ngram_range=ngram_range)
 
-        X_train = train_data['clean_comment'].values
-        y_train = train_data['category'].values
+        X_train = train_data['comment'].values
+        y_train = train_data['sentiment'].values
 
         # Perform TF-IDF transformation
         X_train_tfidf = vectorizer.fit_transform(X_train)
 
         logger.debug(f"TF-IDF transformation complete. Train shape: {X_train_tfidf.shape}")
 
-        # Save the vectorizer in the root directory
-        with open(os.path.join(get_root_directory(), 'tfidf_vectorizer.pkl'), 'wb') as f:
+        # Save the vectorizer to models/ folder
+        models_dir = os.path.join(get_root_directory(), 'models')
+        os.makedirs(models_dir, exist_ok=True)
+        with open(os.path.join(models_dir, 'tfidf_vectorizer.pkl'), 'wb') as f:
             pickle.dump(vectorizer, f)
 
-        logger.debug('TF-IDF applied with trigrams and data transformed')
+        logger.debug('TF-IDF applied and vectorizer saved to models/')
         return X_train_tfidf, y_train
     except Exception as e:
         logger.error('Error during TF-IDF transformation: %s', e)
         raise
 
 
-def train_lgbm(X_train: np.ndarray, y_train: np.ndarray, learning_rate: float, max_depth: int, n_estimators: int) -> lgb.LGBMClassifier:
+def train_lgbm(X_train: np.ndarray, y_train: np.ndarray, num_leaves: int, learning_rate: float, max_depth: int, n_estimators: int) -> lgb.LGBMClassifier:
     """Train a LightGBM model."""
     try:
         best_model = lgb.LGBMClassifier(
@@ -93,6 +101,7 @@ def train_lgbm(X_train: np.ndarray, y_train: np.ndarray, learning_rate: float, m
             class_weight="balanced",
             reg_alpha=0.1,  # L1 regularization
             reg_lambda=0.1,  # L2 regularization
+            num_leaves=num_leaves,
             learning_rate=learning_rate,
             max_depth=max_depth,
             n_estimators=n_estimators
@@ -129,24 +138,48 @@ def main():
 
         # Load parameters from the root directory
         params = load_params(os.path.join(root_dir, 'params.yaml'))
-        max_features = params['model_building']['max_features']
-        ngram_range = tuple(params['model_building']['ngram_range'])
+        max_features = params['tfidf']['max_features']
+        ngram_range = tuple(params['tfidf']['ngram_range'])
 
-        learning_rate = params['model_building']['learning_rate']
-        max_depth = params['model_building']['max_depth']
-        n_estimators = params['model_building']['n_estimators']
+        num_leaves = params['model']['num_leaves']
+        learning_rate = params['model']['learning_rate']
+        max_depth = params['model']['max_depth']
+        n_estimators = params['model']['n_estimators']
 
         # Load the preprocessed training data from the interim directory
         train_data = load_data(os.path.join(root_dir, 'data/interim/train_processed.csv'))
 
-        # Apply TF-IDF feature engineering on training data
-        X_train_tfidf, y_train = apply_tfidf(train_data, max_features, ngram_range)
+        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+        mlflow.set_experiment('sentidex-model-building')
 
-        # Train the LightGBM model using hyperparameters from params.yaml
-        best_model = train_lgbm(X_train_tfidf, y_train, learning_rate, max_depth, n_estimators)
+        with mlflow.start_run():
+            # Log all hyperparameters
+            mlflow.log_params({
+                'max_features': max_features,
+                'ngram_range': str(ngram_range),
+                'num_leaves': num_leaves,
+                'learning_rate': learning_rate,
+                'max_depth': max_depth,
+                'n_estimators': n_estimators
+            })
 
-        # Save the trained model in the root directory
-        save_model(best_model, os.path.join(root_dir, 'lgbm_model.pkl'))
+            # Apply TF-IDF feature engineering on training data
+            X_train_tfidf, y_train = apply_tfidf(train_data, max_features, ngram_range)
+
+            # Train the LightGBM model using hyperparameters from params.yaml
+            best_model = train_lgbm(X_train_tfidf, y_train, num_leaves, learning_rate, max_depth, n_estimators)
+
+            # Save the trained model to models/ folder
+            models_dir = os.path.join(root_dir, 'models')
+            os.makedirs(models_dir, exist_ok=True)
+            model_path = os.path.join(models_dir, 'lgbm_model.pkl')
+            save_model(best_model, model_path)
+
+            # Log artifacts to MLflow
+            mlflow.log_artifact(model_path)
+            mlflow.log_artifact(os.path.join(models_dir, 'tfidf_vectorizer.pkl'))
+
+            logger.debug('Model building complete. Artifacts saved to models/ and logged to MLflow.')
 
     except Exception as e:
         logger.error('Failed to complete the feature engineering and model building process: %s', e)

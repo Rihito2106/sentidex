@@ -25,6 +25,7 @@ stages:
     deps:
       - src/model/model_building.py
       - data/interim/train_processed.csv
+      - params.yaml
     params:
       - tfidf.max_features                 # FIX: matches updated params.yaml keys
       - tfidf.ngram_range

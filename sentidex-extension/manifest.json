@@ -9,8 +9,7 @@
   ],
   "host_permissions": [
     "https://www.googleapis.com/*",
-    "http://localhost:5000/*",
-    "http://my-elb-2062136355.us-east-1.elb.amazonaws.com/*"
+    "http://localhost:5000/*"
   ],
   "action": {
     "default_popup": "popup.html",

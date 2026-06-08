@@ -54,15 +54,15 @@ def register_model(model_name: str, model_info: dict):
         # Register the model
         model_version = mlflow.register_model(model_uri, model_name)
         
-        # Transition the model to "Staging" stage
+        # Transition the model to "Production" stage
         client = mlflow.tracking.MlflowClient()
         client.transition_model_version_stage(
             name=model_name,
             version=model_version.version,
-            stage="Staging"
+            stage="Production"
         )
         
-        logger.debug(f'Model {model_name} version {model_version.version} registered and transitioned to Staging.')
+        logger.debug(f'Model {model_name} version {model_version.version} registered and transitioned to Production.')
     except Exception as e:
         logger.error('Error during model registration: %s', e)
         raise
@@ -73,7 +73,7 @@ def main():
         model_info = load_model_info(model_info_path)
         
         # model_name = "yt_chrome_plugin_model"
-        model_name = "roshit_sentidex_model"
+        model_name = "sentidex-lgbm"
         register_model(model_name, model_info)
     except Exception as e:
         logger.error('Failed to complete the model registration process: %s', e)

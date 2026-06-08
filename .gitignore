@@ -218,4 +218,5 @@ models/
 data/raw/
 data/interim/
 experiment_info.json
-metrics.json
+mlflow.db
+confusion_matrix_Test Data.png
