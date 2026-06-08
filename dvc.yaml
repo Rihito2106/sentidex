@@ -1,50 +1,56 @@
 stages:
-  data-ingestion:
+  data_ingestion:                          # changed hyphen to underscore (consistency)
     cmd: python src/data/data_ingestion.py
     deps:
       - src/data/data_ingestion.py
+      - data/raw/                          # raw dataset folder tracked by dvc add
     params:
       - data_ingestion.test_size
     outs:
-      - data/raw
-  
+      - data/interim/train.csv
+      - data/interim/test.csv
+
   data_preprocessing:
     cmd: python src/data/data_preprocessing.py
     deps:
-    - data/raw/train.csv
-    - data/raw/test.csv
-    - src/data/data_preprocessing.py
+      - src/data/data_preprocessing.py
+      - data/interim/train.csv             # FIX: was data/raw/ — outputs from stage 1 go to interim
+      - data/interim/test.csv              # FIX: same
     outs:
-    - data/interim
+      - data/interim/train_processed.csv   # FIX: specific files, not whole data/interim folder
+      - data/interim/test_processed.csv
 
   model_building:
     cmd: python src/model/model_building.py
     deps:
-    - data/interim/train_processed.csv
-    - src/model/model_building.py
+      - src/model/model_building.py
+      - data/interim/train_processed.csv
     params:
-    - model_building.max_features
-    - model_building.ngram_range
-    - model_building.learning_rate
-    - model_building.max_depth
-    - model_building.n_estimators
+      - tfidf.max_features                 # FIX: matches updated params.yaml keys
+      - tfidf.ngram_range
+      - model.num_leaves
+      - model.learning_rate
+      - model.n_estimators
+      - model.max_depth
     outs:
-    - lgbm_model.pkl
-    - tfidf_vectorizer.pkl
+      - models/lgbm_model.pkl              # FIX: store in models/ folder, not project root
+      - models/tfidf_vectorizer.pkl
 
   model_evaluation:
     cmd: python src/model/model_evaluation.py
     deps:
-    - lgbm_model.pkl
-    - tfidf_vectorizer.pkl
-    - data/interim/train_processed.csv
-    - data/interim/test_processed.csv
-    - src/model/model_evaluation.py
+      - src/model/model_evaluation.py
+      - models/lgbm_model.pkl              # FIX: updated path
+      - models/tfidf_vectorizer.pkl        # FIX: updated path
+      - data/interim/test_processed.csv    # FIX: removed train_processed — eval only needs test
+    metrics:
+      - metrics.json:                      # ADD: proper metrics tracking (DVC reads this)
+          cache: false
     outs:
-    - experiment_info.json
+      - experiment_info.json
 
   model_registration:
     cmd: python src/model/register_model.py
     deps:
-    - experiment_info.json
-    - src/model/register_model.py
+      - src/model/register_model.py
+      - experiment_info.json
