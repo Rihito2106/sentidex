@@ -220,3 +220,4 @@ data/interim/
 experiment_info.json
 mlflow.db
 confusion_matrix_Test Data.png
+metrics.json

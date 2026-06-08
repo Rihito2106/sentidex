@@ -2,11 +2,11 @@ data_ingestion:
   test_size: 0.20
 
 tfidf:
-  max_features: 1000
-  ngram_range: [1, 3]
+  max_features: 5000
+  ngram_range: [1, 2]
 
 model:
-  num_leaves: 50        # replaces max_depth — LightGBM uses this
-  learning_rate: 0.09
-  n_estimators: 367
+  num_leaves: 100       # replaces max_depth — LightGBM uses this
+  learning_rate: 0.05
+  n_estimators: 500
   max_depth: 20         # keep as optional LGBM depth cap (acts as overfit guard)
