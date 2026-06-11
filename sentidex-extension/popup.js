@@ -12,21 +12,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // Utility function to get sentiment class
+  // Backend returns string labels: "Positive", "Negative", "Neutral"
   function getSentimentClass(sentiment) {
     switch(sentiment) {
-      case '1': return 'sentiment-positive';
-      case '-1': return 'sentiment-negative';
-      default: return 'sentiment-neutral';
+      case 'Positive': return 'sentiment-positive';
+      case 'Negative': return 'sentiment-negative';
+      default:         return 'sentiment-neutral';
     }
   }
 
   // Utility function to get sentiment label
   function getSentimentLabel(sentiment) {
-    switch(sentiment) {
-      case '1': return 'Positive';
-      case '-1': return 'Negative';
-      default: return 'Neutral';
-    }
+    return sentiment; // already human-readable
   }
 
   // Get the current tab's URL
@@ -58,28 +55,35 @@ document.addEventListener("DOMContentLoaded", async () => {
         const predictions = await getSentimentPredictions(comments);
 
         if (predictions) {
-          // Process the predictions to get sentiment counts and sentiment data
-          const sentimentCounts = { "1": 0, "0": 0, "-1": 0 };
+          const sentimentCounts = { "Positive": 0, "Neutral": 0, "Negative": 0 };
           const sentimentData = [];
-          const totalSentimentScore = predictions.reduce((sum, item) => sum + parseInt(item.sentiment), 0);
-          
-          predictions.forEach((item, index) => {
-            sentimentCounts[item.sentiment]++;
+
+          predictions.forEach((item) => {
+            if (item.sentiment in sentimentCounts) {
+              sentimentCounts[item.sentiment]++;
+            }
+            // Backend expects integers: 1=Positive, 0=Neutral, -1=Negative
             sentimentData.push({
               timestamp: item.timestamp,
-              sentiment: parseInt(item.sentiment)
+              sentiment: item.sentiment === 'Positive' ? 1 : item.sentiment === 'Negative' ? -1 : 0
             });
           });
 
           // Compute metrics
           const totalComments = comments.length;
-          const uniqueCommenters = new Set(comments.map(comment => comment.authorId)).size;
-          const totalWords = comments.reduce((sum, comment) => sum + comment.text.split(/\s+/).filter(word => word.length > 0).length, 0);
+          const uniqueCommenters = new Set(comments.map(c => c.authorId)).size;
+          const totalWords = comments.reduce(
+            (sum, c) => sum + c.text.split(/\s+/).filter(w => w.length > 0).length, 0
+          );
           const avgWordLength = (totalWords / totalComments).toFixed(1);
-          const avgSentimentScore = (totalSentimentScore / totalComments).toFixed(2);
-          
-          // Normalize the average sentiment score to a scale of 0 to 10
-          const normalizedSentimentScore = (((parseFloat(avgSentimentScore) + 1) / 2) * 10).toFixed(1);
+
+          // Positive=2pts, Neutral=1pt, Negative=0pts -> normalize to 0-10
+          const totalSentimentScore = predictions.reduce((sum, item) => {
+            if (item.sentiment === 'Positive') return sum + 2;
+            if (item.sentiment === 'Neutral')  return sum + 1;
+            return sum;
+          }, 0);
+          const normalizedSentimentScore = ((totalSentimentScore / (totalComments * 2)) * 10).toFixed(1);
 
           // Remove loading message and add results
           outputDiv.innerHTML = outputDiv.innerHTML.replace(showLoading("Performing sentiment analysis..."), "");
@@ -119,7 +123,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             </div>`;
 
           // Fetch and display the pie chart
-          await fetchAndDisplayChart(sentimentCounts);
+          // Chart endpoint expects: "1"=Positive, "0"=Neutral, "-1"=Negative
+          const numericCounts = {
+            "1":  sentimentCounts["Positive"],
+            "0":  sentimentCounts["Neutral"],
+            "-1": sentimentCounts["Negative"]
+          };
+          await fetchAndDisplayChart(numericCounts);
 
           // Add the Sentiment Trend Graph section
           outputDiv.innerHTML += `
